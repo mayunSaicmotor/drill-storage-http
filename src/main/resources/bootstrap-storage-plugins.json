@@ -1,0 +1,10 @@
+{
+  "storage":{
+    http : {
+      type:"http",
+      enabled: true,
+      resultKey: "results",
+      connection: "http://blog.csdn.net"
+    }
+  }
+}
