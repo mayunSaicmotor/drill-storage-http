@@ -26,7 +26,6 @@ import org.apache.drill.exec.physical.impl.ScanBatch;
 import org.apache.drill.exec.record.CloseableRecordBatch;
 import org.apache.drill.exec.record.RecordBatch;
 import org.apache.drill.exec.store.RecordReader;
-import org.apache.drill.exec.store.http.HttpSubScan.HttpSubScanSpec;
 
 import com.google.common.collect.Lists;
 
@@ -41,7 +40,9 @@ public class HttpScanBatchCreator implements BatchCreator<HttpSubScan>{
 		List<RecordReader> readers = Lists.newArrayList();
 		for (HttpSubScanSpec subScanSpec : subScan.getHttpSubScanSpecs()) {
 
-			readers.add(new HttpRecordReader(context, subScanSpec));
+			//readers.add(new HttpRecordReader(context, subScanSpec));
+			//TODO
+			readers.add( new JdbcRecordReader(context, subScanSpec.getDataSource(), subScanSpec.getSQL(), subScanSpec.getTableName()));
 		}
 
     return new ScanBatch(subScan, context, readers.iterator());

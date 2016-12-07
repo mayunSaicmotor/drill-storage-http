@@ -32,6 +32,7 @@ public class HttpEqualFunctionProcessor extends
   AbstractExprVisitor<Boolean, LogicalExpression, RuntimeException> {
   private Object value;
   private SchemaPath path;
+  private String operator = "=";
   private boolean success;
 
   static boolean match(String functionName) {
@@ -48,7 +49,15 @@ public class HttpEqualFunctionProcessor extends
     return evaluator;
   }
 
-  public HttpEqualFunctionProcessor() {
+  public FilterOperator getFilterOperator() {
+	return new FilterOperator (path.getAsUnescapedPath(), operator, value);
+}
+  
+  public String getOperator() {
+	return operator;
+}
+
+public HttpEqualFunctionProcessor() {
   }
 
   public Object getValue() {

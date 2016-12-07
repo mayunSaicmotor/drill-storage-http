@@ -49,6 +49,7 @@ public class HttpSubScan extends AbstractBase implements SubScan {
   @JsonIgnore
   private final HttpStoragePlugin hbaseStoragePlugin;
   private final List<HttpSubScanSpec> httpSubScanSpecs;
+  //TODO
   private final List<SchemaPath> columns;
 
   @JsonCreator
@@ -110,52 +111,6 @@ public class HttpSubScan extends AbstractBase implements SubScan {
   @Override
   public Iterator<PhysicalOperator> iterator() {
     return Collections.emptyIterator();
-  }
-
-  public static class HttpSubScanSpec {
-
-	  private final String tableName;
-	    private final String resultKey;
-	    private final String connection;
-	    private final  String startKey;
-	    private final  String endKey;
-
-	    @JsonCreator
-	    public HttpSubScanSpec(@JsonProperty("tableName") String tableName,
-              @JsonProperty("connection") String connection,
-              @JsonProperty("resultKey") String resultKey,
-	                           @JsonProperty("startKey") String startKey,
-	                           @JsonProperty("endKey") String endKey) {
-	      this.tableName = tableName;
-	      this.connection = connection;
-	      this.resultKey = resultKey;
-	      this.startKey = startKey == null?"":startKey;
-	      this.endKey = endKey == null?"":endKey;
-	    }
-
-	    public String getTableName() {
-	      return tableName;
-	    }
-	    
-	    public String getConnection() {
-		      return connection;
-		    }
-	    public String getResultKey() {
-		      return resultKey;
-		    }
-	    public String getStartKey() {
-	      return startKey;
-	    }
-
-	    public String getEndKey() {
-	      return endKey;
-	    }
-	    
-	    @JsonIgnore
-	    String getFullURL() {
-	      return connection + tableName + "&startKey=" + startKey + "&endKey=" + endKey;
-	    }
-
   }
 
   @Override

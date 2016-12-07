@@ -22,7 +22,6 @@ import java.util.List;
 import org.apache.drill.common.expression.BooleanOperator;
 import org.apache.drill.common.expression.FunctionCall;
 import org.apache.drill.common.expression.LogicalExpression;
-import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.common.expression.visitors.AbstractExprVisitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,13 +46,21 @@ public class HttpFilterBuilder extends
   public HttpScanSpec parseTree() {
     HttpScanSpec parsedSpec = le.accept(this, null);
     if (parsedSpec != null) {
-      parsedSpec = mergeScanSpecs(this.groupScan.getHttpScanSpec(), parsedSpec);
+      parsedSpec = mergeScanSpecs("booleanAnd", this.groupScan.getHttpScanSpec(), parsedSpec);
     }
     return parsedSpec;
   }
 
-  private HttpScanSpec mergeScanSpecs(HttpScanSpec leftScanSpec, HttpScanSpec rightScanSpec) {
-    leftScanSpec.merge(rightScanSpec);
+  private HttpScanSpec mergeScanSpecs(String functionName, HttpScanSpec leftScanSpec, HttpScanSpec rightScanSpec) {
+	  
+
+      if (leftScanSpec.getFilterArgs()!= null) {
+      	  leftScanSpec.merge("booleanAnd".equals(functionName)?true:false, rightScanSpec);
+        } else {
+      	  leftScanSpec = rightScanSpec;
+        }
+	    
+
     return leftScanSpec;
   }
 
@@ -68,7 +75,7 @@ public class HttpFilterBuilder extends
   // `a and b and c` will call this, and argument size = 3
   @Override
   public HttpScanSpec visitBooleanOperator(BooleanOperator op, Void value) {
-    List<LogicalExpression> args = op.args;
+/*    List<LogicalExpression> args = op.args;
     HttpScanSpec nodeScanSpec = null;
     String functionName = op.getName();
     if (!functionName.equals("booleanAnd")) {
@@ -86,6 +93,29 @@ public class HttpFilterBuilder extends
         } else {
           allExpressionsConverted = false;
         }
+      }
+    }
+    return nodeScanSpec;*/
+    
+    
+    List<LogicalExpression> args = op.args;
+    HttpScanSpec nodeScanSpec = null;
+    String functionName = op.getName();
+    for (int i = 0; i < args.size(); ++i) {
+      switch (functionName) {
+      case "booleanAnd":
+      case "booleanOr":
+        if (nodeScanSpec == null) {
+          nodeScanSpec = args.get(i).accept(this, null);
+        } else {
+        	HttpScanSpec scanSpec = args.get(i).accept(this, null);
+          if (scanSpec != null) {
+            nodeScanSpec = mergeScanSpecs(functionName, nodeScanSpec, scanSpec);
+          } else {
+            allExpressionsConverted = false;
+          }
+        }
+        break;
       }
     }
     return nodeScanSpec;
@@ -106,17 +136,17 @@ public class HttpFilterBuilder extends
       allExpressionsConverted = false;
       return nodeScanSpec;
     }
-    logger.debug("visit equal function {}={}", processor.getPath().getAsUnescapedPath(), processor.getValue());
-    nodeScanSpec = createHttpScanSpec(processor.getPath(), processor.getValue());
+    logger.debug("visit equal function {}={}", processor.getFilterOperator());
+    nodeScanSpec = createHttpScanSpec(processor.getFilterOperator());
     return nodeScanSpec;
   }
 
-  private HttpScanSpec createHttpScanSpec(SchemaPath field, Object fieldValue) {
-    String fieldName = field.getAsUnescapedPath();
+  private HttpScanSpec createHttpScanSpec(FilterOperator filterOperator) {
+    //String fieldName = field.getAsUnescapedPath();
 /*    if (fieldName.charAt(0) != '$') { // HTTP query string starts with $
       return null;
     }*/
     //String queryKey = fieldName.substring(1);
-    return new HttpScanSpec(groupScan.getHttpScanSpec().getURL(), "", "", fieldName, fieldValue.toString());
+    return new HttpScanSpec(groupScan.getHttpScanSpec().getTableName(), "", "", filterOperator);
   }
 }

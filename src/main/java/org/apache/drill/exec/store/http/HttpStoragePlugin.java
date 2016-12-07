@@ -27,6 +27,7 @@ import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.store.AbstractStoragePlugin;
 import org.apache.drill.exec.store.SchemaConfig;
 import org.apache.drill.exec.store.StoragePluginOptimizerRule;
+import org.apache.drill.exec.store.http.util.DBUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,14 +47,18 @@ public class HttpStoragePlugin extends AbstractStoragePlugin {
 
   //private final String name;
 
-  public HttpStoragePlugin(HttpStoragePluginConfig storeConfig, DrillbitContext context, String name)
-      throws IOException {
-    this.context = context;
-    this.schemaFactory = new HttpSchemaFactory(this, name);
-    this.storeConfig = storeConfig;
-   // this.name = name;
-    //this.connectionKey = new HBaseConnectionKey();
-  }
+	public HttpStoragePlugin(HttpStoragePluginConfig storeConfig, DrillbitContext context, String name)
+			throws IOException {
+
+		logger.info("create HttpStoragePlugin");
+		this.context = context;
+		this.schemaFactory = new HttpSchemaFactory(this, name);
+		this.storeConfig = storeConfig;
+		// this.name = name;
+		// this.connectionKey = new HBaseConnectionKey();
+		// TODO init the datasource cache
+		DBUtil.createDataSourceCache(storeConfig);
+	}
 
   public DrillbitContext getContext() {
     return this.context;
@@ -86,9 +91,24 @@ public class HttpStoragePlugin extends AbstractStoragePlugin {
   public Set<StoragePluginOptimizerRule> getPhysicalOptimizerRules(OptimizerRulesContext optimizerRulesContext) {
     //return ImmutableSet.of(HttpPushDownFilterForScan.INSTANCE);
 	  //return ImmutableSet.of(PushGroupIntoScan.GROUPBY_ON_SCAN, PushGroupIntoScan.GROUPBY_ON_PROJECT);
-    return ImmutableSet.of(PushGroupAndFilterIntoScan.GROUPBY_ON_SCAN, PushGroupAndFilterIntoScan.GROUPBY_ON_PROJECT, PushGroupAndFilterIntoScan.GROUPBY_ON_PROJECT_AND_FILTER);//, HttpPushDownFilterForScan.INSTANCE);
-    //return ImmutableSet.of(HttpPushFilterIntoScan.FILTER_ON_SCAN, HttpPushFilterIntoScan.FILTER_ON_PROJECT);
-  }
+		return ImmutableSet.of(
+				PushDownOrderByToScan.SORT_ON_SCAN,
+				PushDownOrderByToScan.SORT_ON_PROJECT_SCAN,
+				PushDownOrderByToScan.TOPN_ON_SCAN,
+				PushDownOrderByToScan.TOPN_ON_PROJECT_SCAN,
+				PushDownOrderByToScan.COMMON_SORT_ON_SCAN,
+				PushDownLimitToScan.LIMIT_ON_PROJECT_SCAN, 
+				PushDownLimitToScan.LIMIT_ON_SCAN,
+				PushDownLimitToScan.COMMON_LIMIT_ON_SCAN,
+				PushDownFilterToScan.INSTANCE,
+				PushDownGroupByToScan.GROUPBY_ON_STREAMAGG_SCAN, 
+				PushDownGroupByToScan.GROUPBY_ON_STREAMAGG_PROJECT_SCAN,				
+				PushDownGroupByToScan.GROUPBY_ON_HASHAGG_SCAN, 
+				PushDownGroupByToScan.GROUPBY_ON_HASHAGG_PROJECT_SCAN);
+		// , PushGroupAndFilterIntoScan.GROUPBY_AND_FILTER_ON_HASHAGG_PROJECT_FILTER_SCAN);
+		// return ImmutableSet.of(HttpPushFilterIntoScan.FILTER_ON_SCAN,
+		// HttpPushFilterIntoScan.FILTER_ON_PROJECT);
+	}
   
 /*  @Override
   public Set<PushDownGroupByToScan> getOptimizerRules(OptimizerRulesContext optimizerRulesContext) {

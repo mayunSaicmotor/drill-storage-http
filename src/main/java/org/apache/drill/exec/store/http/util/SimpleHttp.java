@@ -26,7 +26,7 @@ import java.net.URLDecoder;
 public class SimpleHttp {
  static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SimpleHttp.class);
   public String get(String urlStr) {
-    String res = "";
+  /*  String res = "";
     try {
     logger.info("urlStr: " +urlStr);
       URL url = new URL(URLDecoder.decode(urlStr));
@@ -43,7 +43,7 @@ public class SimpleHttp {
     } catch (Exception e) {
     	
     	logger.error("error happens: ", e);
-    }
+    }*/
    // return "{ \"results\": [{ \"firstName\": \"httpBrett2\", \"lastName\":\"McLaughlin\", \"code\": 101 },{ \"firstName\": \"httpJason2\", \"lastName\":\"Hunter\", \"code\": 102},{ \"firstName\": \"httpElliotte2\", \"lastName\":\"Harold\", \"code\": 103 }]}";
     
 /*   if(urlStr.contains("key099")){
@@ -55,9 +55,9 @@ public class SimpleHttp {
    
    if(urlStr.contains("key099")){
    	
-   	return "{ \"results\": [{ \"firstName\": \"httpBrett2\", \"lastName\":\"McLaughlin\", \"code\": 101, \"code_count\": 1 },{ \"firstName\": \"httpJason2\", \"lastName\":\"Hunter\", \"code\": 102, \"code_count\": 1},{ \"firstName\": \"httpElliotte2\", \"lastName\":\"Harold\", \"code\": 103, \"code_count\": 1 }]}";
+   	return "{ \"results\": [{ \"firstName\": \"httpBrett2\", \"lastName\":\"McLaughlin\", \"code\": 101, \"code_count\": 1, \"score\": 401, \"score_count\": 1 },{ \"firstName\": \"httpJason2\", \"lastName\":\"Hunter\", \"code\": 102, \"code_count\": 1, \"score\": 402, \"score_count\": 1},{ \"firstName\": \"httpElliotte2\", \"lastName\":\"Harold\", \"code\": 103, \"code_count\": 1, \"score\": 403, \"score_count\": 1 }]}";
    }else{
-   	return "{ \"results\": [{ \"firstName\": \"httpBrett2\", \"lastName\":\"McLaughlin\", \"code\": 2001, \"code_count\": 1 },{ \"firstName\": \"httpJason2\", \"lastName\":\"Hunter\", \"code\": 2002, \"code_count\": 1},{ \"firstName\": \"httpElliotte2\", \"lastName\":\"Harold\", \"code\": 2003, \"code_count\": 2 }]}";	
+   	return "{ \"results\": [{ \"firstName\": \"httpBrett2\", \"lastName\":\"McLaughlin\", \"code\": 2001, \"code_count\": 1, \"score\": 501, \"score_count\": 1 },{ \"firstName\": \"httpJason2\", \"lastName\":\"Hunter\", \"code\": 2002, \"code_count\": 1, \"score\": 502, \"score_count\": 1},{ \"firstName\": \"httpElliotte2\", \"lastName\":\"Harold\", \"code\": 2003, \"code_count\": 2, \"score\": 503, \"score_count\": 1 }]}";	
    }
     //return res;
   }

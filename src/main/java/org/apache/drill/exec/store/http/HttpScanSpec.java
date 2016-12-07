@@ -18,11 +18,8 @@
 package org.apache.drill.exec.store.http;
 
 
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-
-import org.apache.drill.common.logical.data.NamedExpression;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -36,15 +33,24 @@ public class HttpScanSpec {
   protected String stopRow;
   //protected Filter filter;
 
-  private Map<String, Object> filterArgs = new HashMap<String, Object>();
-  protected List<NamedExpression> groupByCols;
+  private List<FilterOperator> filterArgs = new ArrayList<FilterOperator>();
+  protected List<Boolean> filterBooleanAnds = new ArrayList<Boolean>();
+  protected List<String> groupByCols;
+  protected List<String> orderByCols;
+  protected List<String> OriginalOrderByCols;
+  protected Long limitValue;
   
-  public List<NamedExpression> getGroupByCols() {
-	return groupByCols;
+  
+
+
+
+
+public List<Boolean> getFilterBooleanAnds() {
+	return filterBooleanAnds;
 }
 
-public void setGroupByCols(List<NamedExpression> groupByCols) {
-	this.groupByCols = groupByCols;
+public void setFilterBooleanAnds(List<Boolean> filterBooleanAnds) {
+	this.filterBooleanAnds = filterBooleanAnds;
 }
 
 @JsonCreator
@@ -66,18 +72,18 @@ public void setGroupByCols(List<NamedExpression> groupByCols) {
     }*/
   }
 
-  public HttpScanSpec(String tableName, String startRow, String stopRow, String filterKey, String filterValue) {
+  public HttpScanSpec(String tableName, String startRow, String stopRow, FilterOperator filterOperator) {
     this.tableName = tableName;
     this.startRow = startRow;
     this.stopRow = stopRow;
-    this.filterArgs.put(filterKey, filterValue);
+    this.filterArgs.add(filterOperator);
   }
   
-  public HttpScanSpec(String tableName, String startRow, String stopRow, Map<String, Object> filterArgs) {
+  public HttpScanSpec(String tableName, String startRow, String stopRow, List<FilterOperator> filterArgs) {
 	    this.tableName = tableName;
 	    this.startRow = startRow;
 	    this.stopRow = stopRow;
-	    this.filterArgs.putAll(filterArgs);
+	    this.filterArgs.addAll(filterArgs);
 	  }
 
   public HttpScanSpec(String tableName) {
@@ -90,21 +96,22 @@ public void setGroupByCols(List<NamedExpression> groupByCols) {
   
   @JsonIgnore
   public String getURL() {
-    if (filterArgs.size() == 0) {
+    if (filterArgs.size() == 0 &&(groupByCols==null || groupByCols.size()==0)) {
       return tableName;
     }
     Joiner j = Joiner.on('&');
     String url = tableName;
-    String argStr = j.withKeyValueSeparator("=").join(filterArgs);
+    String argStr = filterArgs.toString();
     if (url.endsWith("?")) {
       url += argStr;
+      
     } else if (url.contains("?")) {
       url += '&' + argStr;
     } else {
       url += '?' + argStr;
     }
     if(groupByCols != null){
-        return url + groupByCols;
+    	return url += '&' +"groupByCols=" + groupByCols.toString();
     }
     return url;
   }
@@ -119,14 +126,65 @@ public void setGroupByCols(List<NamedExpression> groupByCols) {
   }
   
   
-  @JsonIgnore
-    public Map<String, Object> getFilterArgs() {
+
+    public List<FilterOperator> getFilterArgs() {
 	return filterArgs;
   }
+    
+    public List<String> getGroupByCols() {
+    	return groupByCols;
+    }
 
 	@JsonIgnore
-  public void putFilter(String filterKey, String filterValue) {
-    	this.filterArgs.put(filterKey, filterValue);
+    public void setGroupByCols(List<String> groupByCols) {
+    	this.groupByCols = groupByCols;
+    }
+
+	public List<String> getOrderByCols() {
+		return orderByCols;
+	}
+
+	@JsonIgnore
+	public void setOrderByCols(List<String> orderByCols) {
+		this.orderByCols = orderByCols;
+	}
+	@JsonIgnore
+	public List<String> getOriginalOrderByCols() {
+		return OriginalOrderByCols;
+	}
+	@JsonIgnore
+	public void setOriginalOrderByCols(List<String> originalOrderByCols) {
+		OriginalOrderByCols = originalOrderByCols;
+	}
+
+	public Long getLimitValue() {
+		return limitValue;
+	}
+	@JsonIgnore
+	public void setLimitValue(Long limitValue) {
+		this.limitValue = limitValue;
+	}
+	@JsonIgnore
+	public void setTableName(String tableName) {
+		this.tableName = tableName;
+	}
+	@JsonIgnore
+	public void setStartRow(String startRow) {
+		this.startRow = startRow;
+	}
+	@JsonIgnore
+	public void setStopRow(String stopRow) {
+		this.stopRow = stopRow;
+	}
+
+	@JsonIgnore
+	public void setFilterArgs(List<FilterOperator> filterArgs) {
+		this.filterArgs = filterArgs;
+	}
+
+	@JsonIgnore
+  public void putFilter(FilterOperator filterOperator) {
+    	this.filterArgs.add(filterOperator);
   }
   
 /*  @JsonIgnore
@@ -144,14 +202,19 @@ public void setGroupByCols(List<NamedExpression> groupByCols) {
         + ", startRow=" + (startRow == null ? null : startRow)
         + ", stopRow=" + (stopRow == null ? null : stopRow)
         + ", filterArgs=" + (filterArgs == null ? null : filterArgs.toString())
+        + ", groupByCols=" + (groupByCols == null ? null : groupByCols.toString())
         + "]";
   }
 
   
-  public void merge(HttpScanSpec that) {
-	    for (Map.Entry<String, Object> entry : that.filterArgs.entrySet()) {
-	      this.filterArgs.put(entry.getKey(), entry.getValue());
-	    }
+  public void merge(Boolean filterBooleanAnd, HttpScanSpec that) {
+	    //for (Map.Entry<String, Object> entry : that.filterArgs.entrySet()) {
+	  this.filterBooleanAnds.add(filterBooleanAnd);
+	  if(that.getFilterArgs() != null){
+	      this.filterArgs.addAll(that.getFilterArgs());
 	  }
-  
+	  if(that.getGroupByCols()!= null){
+	      this.groupByCols.addAll(that.groupByCols);
+	  }
+  }
 }

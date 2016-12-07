@@ -42,7 +42,6 @@ import org.apache.drill.exec.ops.OperatorContext;
 import org.apache.drill.exec.physical.impl.OutputMutator;
 import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.store.AbstractRecordReader;
-import org.apache.drill.exec.store.http.HttpSubScan.HttpSubScanSpec;
 import org.apache.drill.exec.store.http.util.JsonConverter;
 import org.apache.drill.exec.store.http.util.SimpleHttp;
 import org.apache.drill.exec.vector.NullableBigIntVector;
@@ -77,7 +76,7 @@ public class HttpRecordReader extends AbstractRecordReader {
   private ImmutableList<ValueVector> vectors;
   private ImmutableList<Copier<?>> copiers;
   
-  private List<String> cols = Lists.newArrayList();
+  //private List<String> cols = Lists.newArrayList();
   
   ImmutableList.Builder<ValueVector> vectorBuilder = ImmutableList.builder();
   ImmutableList.Builder<Copier<?>> copierBuilder = ImmutableList.builder();
@@ -97,27 +96,30 @@ public class HttpRecordReader extends AbstractRecordReader {
     logger.debug("HttpRecordReader setup, query {}", scanSpec.getFullURL());
     
     try{
+    	logger.info("subScanSpec.getSQL()"+this.scanSpec.getSQL());
 	    this.writer = new VectorContainerWriter(output);
 	    this.jsonReader = new JsonReader(fragmentContext.getManagedBuffer(),
 	      Lists.newArrayList(getColumns()), true, false, true);
 	  
 	    //TODO
-	    cols.add("firstName");
+/*	    cols.add("firstName");
 	    cols.add("lastName");
 	    cols.add("code");
 	    cols.add("code_count");
-	    
-	    for(int i = 0 ; i < cols.size(); i++){
+	    cols.add("score");
+	    cols.add("score_count");	*/    
+	    List<SchemaPath> columns  = scanSpec.getColumns();
+	    for(int i = 0 ; i < columns.size(); i++){
 	    	
-	    	String col = cols.get(i);
-		    MinorType minorType = MinorType.VARCHAR;
+	    	String col = columns.get(i).getAsUnescapedPath();
+		    MinorType minorType = col.endsWith("_count")? MinorType.BIGINT : MinorType.VARCHAR;
 		     MajorType type = Types.optional(minorType);
 		     MaterializedField field = MaterializedField.create(col, type);
 		     Class<? extends ValueVector> clazz = (Class<? extends ValueVector>) TypeHelper.getValueVectorClass(
 		        minorType, type.getMode());
 		    ValueVector vector = output.addField(field, clazz);
 		    vectorBuilder.add(vector);
-		    copierBuilder.add(getCopier(i,cols.get(i), null, vector));
+		    copierBuilder.add(getCopier(i,col, null, vector));
 	    }
 	   /* 		
 	    MinorType minorType = MinorType.VARCHAR;
@@ -331,9 +333,9 @@ public void close() throws Exception {
     void copy(int index, JsonNode node) throws SQLException {
       //mutator.setSafe(index, result.getLong(columnIndex));
       mutator.setSafe(index, node.get(columnName).asLong());
-      if (result.wasNull()) {
+/*      if (result.wasNull()) {
         mutator.setNull(index);
-      }
+      }*/
     }
 
   }

@@ -33,6 +33,9 @@ public class HttpStoragePluginConfig extends StoragePluginConfig {
   static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(HttpStoragePluginConfig.class);
 
   private Map<String, String> config;
+  private Map<String, Integer> scanConfig;
+  
+  private Map<String, Map<String, String>> dbConfig;
 
 /*  @JsonIgnore
   private Configuration hbaseConf;*/
@@ -62,13 +65,19 @@ public class HttpStoragePluginConfig extends StoragePluginConfig {
 	  }
 	  
   
-  @JsonCreator
-  public HttpStoragePluginConfig(@JsonProperty("connection") String connection,
-      @JsonProperty("resultKey") String resultKey,@JsonProperty("config") Map<String, String> props, @JsonProperty("size.calculator.enabled") Boolean sizeCalculatorEnabled) {
-		
+	@JsonCreator
+	public HttpStoragePluginConfig(@JsonProperty("connection") String connection,
+			@JsonProperty("resultKey") String resultKey, 
+			@JsonProperty("config") Map<String, String> config,
+			@JsonProperty("dbConfig") Map<String, Map<String, String>> dbConfig,
+			@JsonProperty("scanConfig") Map<String, Integer> scanConfig,			
+			@JsonProperty("size.calculator.enabled") Boolean sizeCalculatorEnabled) {
+
 	  this.connection = connection;
 		this.resultKey = resultKey;
-		this.config = props;
+		this.config = config;
+		this.dbConfig = dbConfig;
+		this.scanConfig = scanConfig;
 		if (config == null) {
 			config = Maps.newHashMap();
 		}
@@ -85,6 +94,15 @@ public class HttpStoragePluginConfig extends StoragePluginConfig {
   public Map<String, String> getConfig() {
     return ImmutableMap.copyOf(config);
   }
+  
+  @JsonProperty
+  public Map<String, Map<String, String>> getDbConfig() {
+    return ImmutableMap.copyOf(dbConfig);
+  }
+  @JsonProperty
+  public Map<String, Integer> getScanConfig() {
+    return ImmutableMap.copyOf(scanConfig);
+  }  
 
 /*  @JsonProperty("size.calculator.enabled")
   public boolean isSizeCalculatorEnabled() {
@@ -99,7 +117,7 @@ public class HttpStoragePluginConfig extends StoragePluginConfig {
       return false;
     }
     HttpStoragePluginConfig that = (HttpStoragePluginConfig) o;
-    return config.equals(that.config);
+    return config.equals(that.config) && dbConfig.equals(that.config);
   }
 
   @Override

@@ -19,11 +19,14 @@ package org.apache.drill.exec.store.http;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.expression.SchemaPath;
+import org.apache.drill.exec.physical.EndpointAffinity;
 import org.apache.drill.exec.physical.base.AbstractGroupScan;
 import org.apache.drill.exec.physical.base.GroupScan;
 import org.apache.drill.exec.physical.base.PhysicalOperator;
@@ -31,7 +34,7 @@ import org.apache.drill.exec.physical.base.ScanStats;
 import org.apache.drill.exec.physical.base.ScanStats.GroupScanProperty;
 import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
 import org.apache.drill.exec.store.StoragePluginRegistry;
-import org.apache.drill.exec.store.http.HttpSubScan.HttpSubScanSpec;
+import org.apache.drill.exec.store.http.util.DBUtil;
 import org.apache.drill.exec.store.schedule.CompleteWork;
 import org.apache.drill.exec.store.schedule.EndpointByteMap;
 import org.apache.drill.exec.store.schedule.EndpointByteMapImpl;
@@ -44,6 +47,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Stopwatch;
 import com.google.common.collect.Maps;
 
 @JsonTypeName("http-scan")
@@ -59,6 +63,7 @@ public class HttpGroupScan extends AbstractGroupScan implements HttpConstants {
 
   //private static final Comparator<List<HttpSubScanSpec>> LIST_SIZE_COMPARATOR_REV = Collections.reverseOrder(LIST_SIZE_COMPARATOR);
 
+  private Stopwatch watch = Stopwatch.createUnstarted();
   private HttpStoragePluginConfig storagePluginConfig;
 
   private List<SchemaPath> columns;
@@ -78,10 +83,13 @@ public class HttpGroupScan extends AbstractGroupScan implements HttpConstants {
  // private HTableDescriptor hTableDesc;
 
   private boolean filterPushedDown = false;
-  
   private boolean groupByPushedDown = false;
+  private boolean orderByPushedDown = false;
+  private boolean orderByAggFunc = false;
+  private boolean limitPushedDown = false;
+
   
-  private final static int INIT_TASK_NUM = 2;
+  //private final static int INIT_TASK_NUM = 8;
 
   //private TableStatsCalculator statsCalculator;
 
@@ -112,7 +120,7 @@ public class HttpGroupScan extends AbstractGroupScan implements HttpConstants {
    */
   private HttpGroupScan(HttpGroupScan that) {
     super(that);
-    this.columns = that.columns == null ? ALL_COLUMNS : that.columns;
+    this.columns = (that.columns == null || that.columns.size() == 0) ? ALL_COLUMNS : that.columns;
     this.httpScanSpec = that.httpScanSpec;
     this.endpointFragmentMapping = that.endpointFragmentMapping;
     //this.regionsToScan = that.regionsToScan;
@@ -121,7 +129,9 @@ public class HttpGroupScan extends AbstractGroupScan implements HttpConstants {
     //this.hTableDesc = that.hTableDesc;
     this.filterPushedDown = that.filterPushedDown;
     this.groupByPushedDown = that.groupByPushedDown;
-    
+    this.orderByPushedDown = that.orderByPushedDown;
+    this.limitPushedDown = that.limitPushedDown;
+    this.orderByAggFunc = that.orderByAggFunc;  
 	this.httpWorks = that.httpWorks;
     //this.statsCalculator = that.statsCalculator;
     //this.scanSizeInBytes = that.scanSizeInBytes;
@@ -130,7 +140,7 @@ public class HttpGroupScan extends AbstractGroupScan implements HttpConstants {
   @Override
   public GroupScan clone(List<SchemaPath> columns) {
     HttpGroupScan newScan = new HttpGroupScan(this);
-    newScan.columns = columns == null ? ALL_COLUMNS : columns;;
+		newScan.columns = (columns == null || columns.size() == 0) ? ALL_COLUMNS : columns;;
     //newScan.verifyColumns();
     return newScan;
   }
@@ -149,8 +159,8 @@ public class HttpGroupScan extends AbstractGroupScan implements HttpConstants {
     try {
       
     	//TODO init TASK
-      for (int i= 0; i<INIT_TASK_NUM ;i++) {
-        HttpWork work = new HttpWork("key"+i*100, "key"+i*100+99);
+      for (int i= 0; i<DBUtil.getPart_data_DBs().size();i++) {
+        HttpWork work = new HttpWork("key"+i*100, "key"+i*100+99, "mayun", DBUtil.getPart_data_DBs().get(i));
         
         int bitIndex = i % drillbits.size();
 		work.getByteMap().add(drillbits.get(bitIndex), 1000);
@@ -219,18 +229,18 @@ public class HttpGroupScan extends AbstractGroupScan implements HttpConstants {
     }
   }*/
 
-/*  @Override
+  @Override
   public List<EndpointAffinity> getOperatorAffinity() {
-   // watch.reset();
-    //watch.start();
+    watch.reset();
+    watch.start();
     Map<String, DrillbitEndpoint> endpointMap = new HashMap<String, DrillbitEndpoint>();
     for (DrillbitEndpoint ep : storagePlugin.getContext().getBits()) {
       endpointMap.put(ep.getAddress(), ep);
     }
 
     Map<DrillbitEndpoint, EndpointAffinity> affinityMap = new HashMap<DrillbitEndpoint, EndpointAffinity>();
-    for (ServerName sn : regionsToScan.values()) {
-      DrillbitEndpoint ep = endpointMap.get(sn.getHostname());
+    for (HttpWork httpWork : httpWorks) {
+      DrillbitEndpoint ep = endpointMap.get(httpWork.getHostName());
       if (ep != null) {
         EndpointAffinity affinity = affinityMap.get(ep);
         if (affinity == null) {
@@ -240,9 +250,9 @@ public class HttpGroupScan extends AbstractGroupScan implements HttpConstants {
         }
       }
     }
-   // logger.debug("Took {} µs to get operator affinity", watch.elapsed(TimeUnit.NANOSECONDS)/1000);
+    logger.debug("Took {} µs to get operator affinity", watch.elapsed(TimeUnit.NANOSECONDS)/1000);
     return Lists.newArrayList(affinityMap.values());
-  }*/
+  }
 
   /**
    *
@@ -250,144 +260,97 @@ public class HttpGroupScan extends AbstractGroupScan implements HttpConstants {
    */
   @Override
   public void applyAssignments(List<DrillbitEndpoint> incomingEndpoints) {
-   // watch.reset();
-   // watch.start();
+    watch.reset();
+    watch.start();
 
-	  logger.info("incomingEndpoints size: " + incomingEndpoints.size());
-	  logger.info("incomingEndpoints: " + incomingEndpoints.toString());
-	  endpointFragmentMapping = Maps.newHashMapWithExpectedSize(2);
-	  
-	  for( int i = 0; i< httpWorks.size(); i++){
+	    final int numSlots = incomingEndpoints.size();
+		  logger.info("incomingEndpoints size: " + numSlots);
+		  logger.info("incomingEndpoints: " + incomingEndpoints.toString());
 		  
-		  HttpWork work =httpWorks.get(i);
-		  endpointFragmentMapping.put(i, new ArrayList<HttpSubScanSpec>(1));
-		  List<HttpSubScanSpec> endpointSlotScanList = endpointFragmentMapping.get(i);
-	      endpointSlotScanList.add(new HttpSubScanSpec(httpScanSpec.getURL(),storagePluginConfig.getConnection(), storagePluginConfig.getResultKey(), work.getPartitionKeyStart(), work.getPartitionKeyEnd()));
+		Preconditions.checkArgument(numSlots <= httpWorks.size(), String
+				.format("Incoming endpoints %d is greater than number of scan regions %d", numSlots, httpWorks.size()));
 
-		  logger.info("endpointSlotScanList: " + endpointSlotScanList);
-	  }
-	  
-	  logger.info("applyAssignments endpointFragmentMapping: " + endpointFragmentMapping);
+		/*
+		 * Minimum/Maximum number of assignment per slot
+		 */
+		final int minPerEndpointSlot = (int) Math.floor((double) httpWorks.size() / numSlots);
+		final int maxPerEndpointSlot = (int) Math.ceil((double) httpWorks.size() / numSlots);
 
-	    
-/*	  endpointFragmentMapping.put(0, new ArrayList<HttpSubScanSpec>(2));
-	  List<HttpSubScanSpec> endpointSlotScanList = endpointFragmentMapping.get(0);
-      endpointSlotScanList.add(regionInfoToSubScanSpec(regionsToScan.keySet().iterator().next()));
-      endpointSlotScanList.add(regionInfoToSubScanSpec(regionsToScan.keySet().iterator().next()));
-      
-	  endpointFragmentMapping.put(1, new ArrayList<HttpSubScanSpec>(2));s
-	  endpointSlotScanList = endpointFragmentMapping.get(1);
-      endpointSlotScanList.add(regionInfoToSubScanSpec(regionsToScan.keySet().iterator().next()));
-      endpointSlotScanList.add(regionInfoToSubScanSpec(regionsToScan.keySet().iterator().next()));*/
-	  
-	/*  
-      
-	  
-	  final int numSlots = incomingEndpoints.size();
-    Preconditions.checkArgument(numSlots <= regionsToScan.size(),
-        String.format("Incoming endpoints %d is greater than number of scan regions %d", numSlots, regionsToScan.size()));
+		endpointFragmentMapping = Maps.newHashMapWithExpectedSize(numSlots);
 
-    
-     * Minimum/Maximum number of assignment per slot
-     
-    final int minPerEndpointSlot = (int) Math.floor((double)regionsToScan.size() / numSlots);
-    final int maxPerEndpointSlot = (int) Math.ceil((double)regionsToScan.size() / numSlots);
+		for (int i = 0; i < httpWorks.size(); i++) {
 
-    
-     * initialize (endpoint index => HttpSubScanSpec list) map
-     
-    endpointFragmentMapping = Maps.newHashMapWithExpectedSize(numSlots);
+			int slotIndex = i % numSlots;
+			HttpWork work = httpWorks.get(i);
 
-    
-     * another map with endpoint (hostname => corresponding index list) in 'incomingEndpoints' list
-     
-    Map<String, Queue<Integer>> endpointHostIndexListMap = Maps.newHashMap();
+			List<HttpSubScanSpec> endpointSlotScanList = endpointFragmentMapping.get(slotIndex);
+			if (endpointSlotScanList == null) {
+				endpointSlotScanList = new ArrayList<HttpSubScanSpec>(maxPerEndpointSlot);
+			}
+			
+			Boolean executeLimitFlg = calcExecuteLimitFlg();	
+			//TODO
+			HttpSubScanSpec tmpScanSpec = new HttpSubScanSpec(work.getDbName(),
+					httpScanSpec.getTableName(),
+					storagePluginConfig.getConnection(), 
+					storagePluginConfig.getResultKey(),
+					work.getPartitionKeyStart(), 
+					work.getPartitionKeyEnd(), 
+					httpScanSpec.getFilterArgs(),
+					httpScanSpec.getGroupByCols(), 
+					httpScanSpec.getOrderByCols(),
+					executeLimitFlg?httpScanSpec.getLimitValue():null,
+					this.columns);		
+			
+			endpointSlotScanList.add(tmpScanSpec);
+			endpointFragmentMapping.put(slotIndex, endpointSlotScanList);
+			logger.info("endpointSlotScanList: " + endpointSlotScanList);
+		}
 
-    
-     * Initialize these two maps
-     
-    for (int i = 0; i < numSlots; ++i) {
-      endpointFragmentMapping.put(i, new ArrayList<HttpSubScanSpec>(maxPerEndpointSlot));
-      String hostname = incomingEndpoints.get(i).getAddress();
-      Queue<Integer> hostIndexQueue = endpointHostIndexListMap.get(hostname);
-      if (hostIndexQueue == null) {
-        hostIndexQueue = Lists.newLinkedList();
-        endpointHostIndexListMap.put(hostname, hostIndexQueue);
-      }
-      hostIndexQueue.add(i);
-    }
+		logger.info("applyAssignments endpointFragmentMapping: " + endpointFragmentMapping);
 
-    Set<Entry<HttpTestDto, ServerName>> regionsToAssignSet = Sets.newHashSet(regionsToScan.entrySet());
+	
+    logger.debug("Built assignment map in {} µs.\nEndpoints: {}.\nAssignment Map: {}",
+        watch.elapsed(TimeUnit.NANOSECONDS)/1000, incomingEndpoints, endpointFragmentMapping.toString());
+  }
 
-    
-     * First, we assign regions which are hosted on region servers running on drillbit endpoints
-     
-    for (Iterator<Entry<HttpTestDto, ServerName>> regionsIterator = regionsToAssignSet.iterator(); regionsIterator.hasNext(); nothing) {
-      Entry<HttpTestDto, ServerName> regionEntry = regionsIterator.next();
-      
-       * Test if there is a drillbit endpoint which is also an Http RegionServer that hosts the current Http region
-       
-      Queue<Integer> endpointIndexlist = endpointHostIndexListMap.get(regionEntry.getValue().getHostname());
-      if (endpointIndexlist != null) {
-        Integer slotIndex = endpointIndexlist.poll();
-        List<HttpSubScanSpec> endpointSlotScanList = endpointFragmentMapping.get(slotIndex);
-        endpointSlotScanList.add(regionInfoToSubScanSpec(regionEntry.getKey()));
-        // add to the tail of the slot list, to add more later in round robin fashion
-        endpointIndexlist.offer(slotIndex);
-        // this region has been assigned
-        regionsIterator.remove();
-      }
-    }
+	private Boolean calcExecuteLimitFlg() {
+		Boolean executeLimitFlg = true;
+		// if it is only single major fragment, LimitPrel/SortPrel node can be
+		// push down to scan,limitPushedDown/orderbyPushedDown can be true
 
-    
-     * Build priority queues of slots, with ones which has tasks lesser than 'minPerEndpointSlot' and another which have more.
-     
-    PriorityQueue<List<HttpSubScanSpec>> minHeap = new PriorityQueue<List<HttpSubScanSpec>>(numSlots, LIST_SIZE_COMPARATOR);
-    PriorityQueue<List<HttpSubScanSpec>> maxHeap = new PriorityQueue<List<HttpSubScanSpec>>(numSlots, LIST_SIZE_COMPARATOR_REV);
-    for(List<HttpSubScanSpec> listOfScan : endpointFragmentMapping.values()) {
-      if (listOfScan.size() < minPerEndpointSlot) {
-        minHeap.offer(listOfScan);
-      } else if (listOfScan.size() > minPerEndpointSlot) {
-        maxHeap.offer(listOfScan);
-      }
-    }
+		//has groupby 
+		if (this.groupByPushedDown) {
+			
+			List<String> groupByCols = httpScanSpec.getGroupByCols();
+			List<String> orderByCols = httpScanSpec.getOriginalOrderByCols();
+			
+			if (orderByCols == null || orderByCols.size() < groupByCols.size()) {
+				
+				executeLimitFlg = false;
+			} else {
+				
+				// if order by cols don't start with group by cols and with the same cols order,  limit operation can't be push down
+				for (int i = 0; i < groupByCols.size(); i++) {
 
-    
-     * Now, let's process any regions which remain unassigned and assign them to slots with minimum number of assignments.
-     
-    if (regionsToAssignSet.size() > 0) {
-      for (Entry<HttpTestDto, ServerName> regionEntry : regionsToAssignSet) {
-        List<HttpSubScanSpec> smallestList = minHeap.poll();
-        smallestList.add(regionInfoToSubScanSpec(regionEntry.getKey()));
-        if (smallestList.size() < maxPerEndpointSlot) {
-          minHeap.offer(smallestList);
-        }
-      }
-    }
+					if (!groupByCols.get(i).equals(orderByCols.get(i))) {
+						executeLimitFlg = false;
+						break;
+					}
+				}
+			}
+			
+/*			// if order by col is not AGG func
+			// TODO
+			if (!this.orderByAggFunc) {
 
-    
-     * While there are slots with lesser than 'minPerEndpointSlot' unit work, balance from those with more.
-     
-    while(minHeap.peek() != null && minHeap.peek().size() < minPerEndpointSlot) {
-      List<HttpSubScanSpec> smallestList = minHeap.poll();
-      List<HttpSubScanSpec> largestList = maxHeap.poll();
-      smallestList.add(largestList.remove(largestList.size()-1));
-      if (largestList.size() > minPerEndpointSlot) {
-        maxHeap.offer(largestList);
-      }
-      if (smallestList.size() < minPerEndpointSlot) {
-        minHeap.offer(smallestList);
-      }
-    }
+			}*/
+			
+		}
 
-     no slot should be empty at this point 
-    assert (minHeap.peek() == null || minHeap.peek().size() > 0) : String.format(
-        "Unable to assign tasks to some endpoints.\nEndpoints: {}.\nAssignment Map: {}.",
-        incomingEndpoints, endpointFragmentMapping.toString());
 
-    //logger.debug("Built assignment map in {} µs.\nEndpoints: {}.\nAssignment Map: {}",
-       // watch.elapsed(TimeUnit.NANOSECONDS)/1000, incomingEndpoints, endpointFragmentMapping.toString());
-*/  }
+		return executeLimitFlg;
+	}
 
 /*  private HttpSubScanSpec regionInfoToSubScanSpec(HttpTestDto rit) {
 	  HRegionInfo ri = rit.getRegionInfo();
@@ -436,7 +399,30 @@ public class HttpGroupScan extends AbstractGroupScan implements HttpConstants {
     
 	  logger.debug("rowCount: " + rowCount);
 	  logger.debug("diskCost: " + diskCost);*/
-	return new ScanStats(GroupScanProperty.NO_EXACT_ROW_COUNT, 4194304, 4, 318767104);
+	  
+
+/*	  long totalScanRowCountOnEachNode=10000000;
+	  long avgRowSizeInBytes = 10*1024;//10kb
+	  long scanSizeInBytes = totalScanRowCountOnEachNode * 10*1024;
+	  long colsPerRow = 100;*/
+	  
+	  long totalRowCountOnEachNode=10000000;
+	  long avgRowSizeInBytes = 1024;//1kb
+	  long colsPerRow = 100;
+	  
+	  if(storagePluginConfig.getScanConfig() != null){
+	   totalRowCountOnEachNode=storagePluginConfig.getScanConfig().get("totalRowCountOnEachNode");
+	   avgRowSizeInBytes = storagePluginConfig.getScanConfig().get("avgRowSizeInBytes");
+	   colsPerRow = storagePluginConfig.getScanConfig().get("colsPerRow");;
+	  }
+	  
+	    long rowCount = (long) (totalRowCountOnEachNode * (httpScanSpec.getFilterArgs() != null && httpScanSpec.getFilterArgs().size()>0? 0.5 : 1)* (httpScanSpec.getGroupByCols()!= null ? 0.5 : 1));
+	    // the following calculation is not precise since 'columns' could specify CFs while getColsPerRow() returns the number of qualifier.
+	    float diskCost = rowCount * avgRowSizeInBytes * ((columns == null || columns.isEmpty()) ? 1 : columns.size()/colsPerRow);
+	    return new ScanStats(GroupScanProperty.NO_EXACT_ROW_COUNT, rowCount, 1, diskCost);			  
+			  
+			  
+	//return new ScanStats(GroupScanProperty.NO_EXACT_ROW_COUNT, 100000000, 1, 318767104);
 	//return new ScanStats(GroupScanProperty.EXACT_ROW_COUNT, 1, 1, (float) 10);  
    //return new ScanStats(GroupScanProperty.EXACT_ROW_COUNT, 4, 1, 318767104);
   }
@@ -484,6 +470,11 @@ public class HttpGroupScan extends AbstractGroupScan implements HttpConstants {
   public List<SchemaPath> getColumns() {
     return columns;
   }
+  
+  @JsonProperty
+  public  void setColumns(List<SchemaPath> columns) {
+    this.columns = columns;
+  }
 
   @JsonProperty
   public HttpScanSpec getHttpScanSpec() {
@@ -512,6 +503,30 @@ public class HttpGroupScan extends AbstractGroupScan implements HttpConstants {
 
 public void setGroupByPushedDown(boolean groupByPushedDown) {
 	this.groupByPushedDown = groupByPushedDown;
+}
+
+public boolean isOrderByPushedDown() {
+	return orderByPushedDown;
+}
+
+public void setOrderByPushedDown(boolean orderByPushedDown) {
+	this.orderByPushedDown = orderByPushedDown;
+}
+
+public boolean isOrderByAggFunc() {
+	return orderByAggFunc;
+}
+
+public void setOrderByAggFunc(boolean orderByAggFunc) {
+	this.orderByAggFunc = orderByAggFunc;
+}
+
+public boolean isLimitPushedDown() {
+	return limitPushedDown;
+}
+
+public void setLimitPushedDown(boolean limitPushedDown) {
+	this.limitPushedDown = limitPushedDown;
 }
 
 /**
@@ -544,10 +559,14 @@ public void setGroupByPushedDown(boolean groupByPushedDown) {
 	    private EndpointByteMapImpl byteMap = new EndpointByteMapImpl();
 	    private String partitionKeyStart;
 	    private String partitionKeyEnd;
+	    private String hostName;
+	    private String dbName;
 
-	    public HttpWork(String partitionKeyStart, String partitionKeyEnd) {
+	    public HttpWork(String partitionKeyStart, String partitionKeyEnd, String hostName, String dbName) {
 	      this.partitionKeyStart = partitionKeyStart;
 	      this.partitionKeyEnd = partitionKeyEnd;
+	      this.hostName = hostName;
+	      this.dbName = dbName;
 	    }
 
 	    public String getPartitionKeyStart() {
@@ -558,7 +577,15 @@ public void setGroupByPushedDown(boolean groupByPushedDown) {
 	      return partitionKeyEnd;
 	    }
 
-	    @Override
+	    public String getHostName() {
+			return hostName;
+		}
+
+		public String getDbName() {
+			return dbName;
+		}
+
+		@Override
 	    public long getTotalBytes() {
 	      return 1000;
 	    }

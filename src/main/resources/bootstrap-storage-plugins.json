@@ -4,7 +4,73 @@
       type:"http",
       enabled: true,
       resultKey: "results",
-      connection: "http://blog.csdn.net"
-    }
+      connection: "http://blog.csdn.net",
+	   config: {
+				"alldatadb": "student",
+				"insertTestData": "false"
+			},	
+	   scanConfig: {
+				"totalRowCountOnEachNode": 3000000,
+				"avgRowSizeInBytes": 1024,
+				"colsPerRow": 5
+				
+			},				
+		dbConfig: {
+				student:{
+				  "driver": "com.mysql.jdbc.Driver",
+				  "url": "jdbc:mysql://mayun:3306/student",
+				  "username": "root",
+				  "password": "mayun"
+				},
+				student1:{
+				  "driver": "com.mysql.jdbc.Driver",
+				  "url": "jdbc:mysql://mayun:3306/student1",
+				  "username": "root",
+				  "password": "mayun"
+				},
+				student2:{
+				  "driver": "com.mysql.jdbc.Driver",
+				  "url": "jdbc:mysql://mayun:3306/student2",
+				  "username": "root",
+				  "password": "mayun"
+				},
+				student3:{
+				  "driver": "com.mysql.jdbc.Driver",
+				  "url": "jdbc:mysql://mayun:3306/student3",
+				  "username": "root",
+				  "password": "mayun"
+				},
+				student4:{
+				  "driver": "com.mysql.jdbc.Driver",
+				  "url": "jdbc:mysql://mayun:3306/student4",
+				  "username": "root",
+				  "password": "mayun"
+				},
+				student5:{
+				  "driver": "com.mysql.jdbc.Driver",
+				  "url": "jdbc:mysql://mayun:3306/student5",
+				  "username": "root",
+				  "password": "mayun"
+				},
+				student6:{
+				  "driver": "com.mysql.jdbc.Driver",
+				  "url": "jdbc:mysql://mayun:3306/student6",
+				  "username": "root",
+				  "password": "mayun"
+				},
+				student7:{
+				  "driver": "com.mysql.jdbc.Driver",
+				  "url": "jdbc:mysql://mayun:3306/student7",
+				  "username": "root",
+				  "password": "mayun"
+				},		
+				student8:{
+				  "driver": "com.mysql.jdbc.Driver",
+				  "url": "jdbc:mysql://mayun:3306/student8",
+				  "username": "root",
+				  "password": "mayun"
+				}					
+			}
+	}
   }
 }
